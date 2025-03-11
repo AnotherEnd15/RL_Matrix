@@ -39,6 +39,8 @@ namespace RLMatrix.Agents.Common
         /// <param name="isTraining">Indicates whether the agent is in training mode.</param>
         /// <returns>An array of selected actions.</returns>
         int[][] SelectActions(T[] states, bool isTraining);
+
+        void SetActionMask(int[] mask);
     }
 
     /// <summary>
@@ -136,6 +138,8 @@ namespace RLMatrix.Agents.Common
         /// <param name="isTraining">Indicates whether the agent is in training mode.</param>
         /// <returns>An array of selected actions.</returns>
         int[][] SelectActions(T[] states, bool isTraining);
+
+        void SetActionMask(int[] mask);
 
         /// <summary>
         /// Optimizes the agent's model.

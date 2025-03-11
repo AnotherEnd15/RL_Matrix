@@ -86,6 +86,25 @@ namespace RLMatrix.Agents.PPO.Implementations
 #endif
         }
 
+        /// <summary>
+        /// Set a mask to the action probs
+        /// </summary>
+        /// <param name="mask">Array of masks (i.e., float.MinValue if masked, otherwise 1)</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+#if NET8_0_OR_GREATER
+        public ValueTask SetActionMask(int[] mask)
+#else
+        public Task SetActionMask(int[] mask)
+#endif
+        {
+            _agent.SetActionMask(mask);
+#if NET8_0_OR_GREATER
+            return ValueTask.CompletedTask;
+#else
+            return Task.CompletedTask;
+#endif
+        }
+
 #if NET8_0_OR_GREATER
         public ValueTask<Dictionary<Guid, int[]>> SelectActionsBatchAsync(List<(Guid environmentId, T state)> stateInfos, bool isTraining)
 #else

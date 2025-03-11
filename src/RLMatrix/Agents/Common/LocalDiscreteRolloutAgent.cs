@@ -17,6 +17,8 @@ namespace RLMatrix.Agents.Common
         protected readonly Dictionary<Guid, IEnvironmentAsync<TState>> _environments;
         protected readonly Dictionary<Guid, Episode<TState>> _ennvPairs;
         protected readonly IDiscreteProxy<TState> _agent;
+        public Guid Id { get; set; }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="LocalDiscreteRolloutAgent{TState}"/> class with DQN agent options.
         /// </summary>
@@ -27,6 +29,7 @@ namespace RLMatrix.Agents.Common
             _environments = environments.ToDictionary(env => Guid.NewGuid(), env => env);
             _ennvPairs = _environments.ToDictionary(pair => pair.Key, pair => new Episode<TState>());
             _agent = new LocalDiscreteQAgent<TState>(options, environments.First().actionSize, environments.First().stateSize);
+            Id = Guid.NewGuid();
         }
 
         /// <summary>
@@ -39,6 +42,7 @@ namespace RLMatrix.Agents.Common
             _environments = environments.ToDictionary(env => Guid.NewGuid(), env => env);
             _ennvPairs = _environments.ToDictionary(pair => pair.Key, pair => new Episode<TState>());
             _agent = new LocalDiscretePPOAgent<TState>(options, environments.First().actionSize, environments.First().stateSize);
+            Id = Guid.NewGuid();
         }
 
 
@@ -47,12 +51,12 @@ namespace RLMatrix.Agents.Common
         /// </summary>
         /// <param name="isTraining">Indicates whether the agent is in training mode.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task Step(bool isTraining = true)
+        public async Task<int> Step(bool isTraining = true)
         {
             List<Task<(Guid environmentId, TState state)>> stateTaskList = new List<Task<(Guid environmentId, TState state)>>();
             foreach (var env in _environments)
             {
-                var stateTask = GetStateAsync(env.Key, env.Value);
+                var stateTask = GetPreStateAsync(env.Key, env.Value);
                 stateTaskList.Add(stateTask);
             }
             var stateResults = await Task.WhenAll(stateTaskList);
@@ -64,7 +68,7 @@ namespace RLMatrix.Agents.Common
             foreach (var action in actions)
             {
                 var env = _environments[action.Key];
-                var rewardTask = env.Step(action.Value)
+                var rewardTask = env.Step(Id, action.Value)
                     .ContinueWith(t => (action.Key, t.Result));
                 rewardTaskList.Add(rewardTask);
             }
@@ -74,7 +78,7 @@ namespace RLMatrix.Agents.Common
             List<Task<(Guid environmentId, TState state)>> nextStateTaskList = new List<Task<(Guid environmentId, TState state)>>();
             foreach (var env in _environments)
             {
-                var stateTask = GetStateAsync(env.Key, env.Value);
+                var stateTask = GetPostStateAsync(env.Key, env.Value);
                 nextStateTaskList.Add(stateTask);
             }
             var nextStateResults = await Task.WhenAll(nextStateTaskList);
@@ -124,9 +128,11 @@ namespace RLMatrix.Agents.Common
             await _agent.ResetStates(completedEpisodes);
 
             if (!isTraining)
-                return;
+                return actions.First().Value[0];
 
             await _agent.OptimizeModelAsync();
+
+            return actions.First().Value[0];
         }
 
         public void StepSync(bool isTraining = true)
@@ -134,7 +140,7 @@ namespace RLMatrix.Agents.Common
             List<(Guid environmentId, TState state)> stateResults = new List<(Guid environmentId, TState state)>();
             foreach (var env in _environments)
             {
-                var state = GetStateSync(env.Key, env.Value);
+                var state = GetPreStateSync(env.Key, env.Value);
                 stateResults.Add(state);
             }
 
@@ -145,14 +151,14 @@ namespace RLMatrix.Agents.Common
             foreach (var action in actions)
             {
                 var env = _environments[action.Key];
-                var reward = env.Step(action.Value).GetAwaiter().GetResult();
+                var reward = env.Step(Id, action.Value).GetAwaiter().GetResult();
                 rewardResults.Add((action.Key, reward));
             }
 
             List<(Guid environmentId, TState state)> nextStateResults = new List<(Guid environmentId, TState state)>();
             foreach (var env in _environments)
             {
-                var state = GetStateSync(env.Key, env.Value);
+                var state = GetPostStateSync(env.Key, env.Value);
                 nextStateResults.Add(state);
             }
 
@@ -194,9 +200,15 @@ namespace RLMatrix.Agents.Common
             }
         }
 
-        private (Guid environmentId, TState state) GetStateSync(Guid environmentId, IEnvironmentAsync<TState> env)
+        private (Guid environmentId, TState state) GetPreStateSync(Guid environmentId, IEnvironmentAsync<TState> env)
         {
-            var state = DeepCopy(env.GetCurrentState().GetAwaiter().GetResult());
+            var state = DeepCopy(env.GetCurrentState(Id, false).GetAwaiter().GetResult());
+            return (environmentId, state);
+        }
+
+        private (Guid environmentId, TState state) GetPostStateSync(Guid environmentId, IEnvironmentAsync<TState> env)
+        {
+            var state = DeepCopy(env.GetCurrentState(Id, true).GetAwaiter().GetResult());
             return (environmentId, state);
         }
 
@@ -205,6 +217,14 @@ namespace RLMatrix.Agents.Common
             return _agent.SelectActionsBatchAsync(stateInfos, isTraining).GetAwaiter().GetResult();
         }
 
+        /// <summary>
+        /// Sets a mask for the action probs (i.e., float.MinValue if masked, otherwise 1)
+        /// </summary>
+        /// <param name="mask"></param>
+        public void SetActionMask(int[] mask)
+        {
+            _agent.SetActionMask(mask);
+        }
 
         /// <summary>
         /// Gets actions for a batch of states asynchronously.
@@ -218,10 +238,10 @@ namespace RLMatrix.Agents.Common
             return _agent.SelectActionsBatchAsync(stateInfos, isTraining);
         }
 #else
-    public Task<Dictionary<Guid, int[]>> GetActionsBatchAsync(List<(Guid environmentId, TState state)> stateInfos, bool isTraining)
-    {
-        return _agent.SelectActionsBatchAsync(stateInfos, isTraining);
-    }
+        public Task<Dictionary<Guid, int[]>> GetActionsBatchAsync(List<(Guid environmentId, TState state)> stateInfos, bool isTraining)
+        {
+            return _agent.SelectActionsBatchAsync(stateInfos, isTraining);
+        }
 #endif
 
         private TState DeepCopy(TState input)
@@ -244,9 +264,15 @@ namespace RLMatrix.Agents.Common
             }
         }
 
-        private async Task<(Guid environmentId, TState state)> GetStateAsync(Guid environmentId, IEnvironmentAsync<TState> env)
+        private async Task<(Guid environmentId, TState state)> GetPreStateAsync(Guid environmentId, IEnvironmentAsync<TState> env)
         {
-            var state = DeepCopy(await env.GetCurrentState());
+            var state = DeepCopy(await env.GetCurrentState(Id, false));
+            return (environmentId, state);
+        }
+
+        private async Task<(Guid environmentId, TState state)> GetPostStateAsync(Guid environmentId, IEnvironmentAsync<TState> env)
+        {
+            var state = DeepCopy(await env.GetCurrentState(Id, true));
             return (environmentId, state);
         }
 

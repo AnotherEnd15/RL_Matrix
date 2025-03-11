@@ -31,18 +31,25 @@ namespace RLMatrix
         /// Returns the current state of the environment.
         /// </summary>
         /// <returns>Current state of the environment of type <typeparamref name="TState"/></returns>
-        public Task<TState> GetCurrentState();
+        public Task<TState> GetCurrentState(Guid agentId, bool isPostState);
 
         /// <summary>
         /// Resets the environment to its initial state at the beginning of a new episode.
         /// </summary>
         public Task Reset();
 
+        ///// <summary>
+        ///// Advances the state of the environment by one step based on the action provided.
+        ///// </summary>
+        ///// <param name="actionsIds">The action to be taken in the current state.</param>
+        ///// <returns>The reward associated with the taken action. Bool trajectory done</returns>
+        //public Task<(float, bool)> Step(int[] actionsIds);
+
         /// <summary>
         /// Advances the state of the environment by one step based on the action provided.
         /// </summary>
         /// <param name="actionsIds">The action to be taken in the current state.</param>
         /// <returns>The reward associated with the taken action. Bool trajectory done</returns>
-        public Task<(float, bool)> Step(int[] actionsIds);
+        public Task<(float, bool)> Step(Guid agentId, int[] actionsIds);
     }
 }

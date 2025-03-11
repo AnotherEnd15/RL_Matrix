@@ -15,15 +15,17 @@ namespace RLMatrix.Agents.PPO.Implementations
                 {
                     Tensor stateTensor = Utilities<T>.StateToTensor(states[i].state, Device);
                     var forwardResult = actorNet.forward(stateTensor, states[i].memoryState, states[i].memoryState2);
+                    Tensor actionProbs = PPOActionSelection<T>.ApplyMask(forwardResult.Item1, this.ActionMask, this.Device);
+
                     if (isTraining)
                     {
-                        int[] discreteActions = PPOActionSelection<T>.SelectDiscreteActionsFromProbs(forwardResult.Item1, ActionSizes);
+                        int[] discreteActions = PPOActionSelection<T>.SelectDiscreteActionsFromProbs(actionProbs, ActionSizes);
                         result[i] = (discreteActions, forwardResult.Item2, forwardResult.Item3);
                      
                     }
                     else
                     {
-                        int[] discreteActions = PPOActionSelection<T>.SelectGreedyDiscreteActions(forwardResult.Item1, ActionSizes);
+                        int[] discreteActions = PPOActionSelection<T>.SelectGreedyDiscreteActions(actionProbs, ActionSizes);
                         result[i] = (discreteActions, forwardResult.Item2, forwardResult.Item3);
                     }
 

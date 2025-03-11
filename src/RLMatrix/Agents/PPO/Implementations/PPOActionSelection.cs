@@ -19,6 +19,7 @@ namespace RLMatrix.Agents.PPO.Implementations
             for (int i = 0; i < actionSize.Count(); i++)
             {
                 var actionProbs = result.select(1, i);
+                var receivedActions = actionProbs.data<float>().ToArray();
                 var action = torch.multinomial(actionProbs, 1);
                 actions.Add((int)action.item<long>());
             }
@@ -57,6 +58,7 @@ namespace RLMatrix.Agents.PPO.Implementations
             for (int i = 0; i < actionSize.Count(); i++)
             {
                 var actionProbs = result.select(1, i);
+                //var receivedActions = actionProbs.data<float>().ToArray();
                 var action = actionProbs.argmax();
                 actions.Add((int)action.item<long>());
             }
@@ -74,6 +76,14 @@ namespace RLMatrix.Agents.PPO.Implementations
                 actions.Add(mean);
             }
             return actions.ToArray();
+        }
+
+        internal static Tensor ApplyMask(Tensor actions, int[] actionMask, Device device)
+        {
+            Tensor mask = torch.tensor(actionMask, ScalarType.Int16).to(device);
+            Tensor actionProbs = actions * mask;
+            var receivedActions = actionProbs.data<float>().ToArray();
+            return actionProbs;
         }
 
         #endregion

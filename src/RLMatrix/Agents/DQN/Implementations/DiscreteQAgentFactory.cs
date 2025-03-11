@@ -47,14 +47,14 @@ namespace RLMatrix
                 : new BaseComputeLoss();
 
             var Optimizer = new QOptimize<T>(policyNet, targetNet, optimizer, qValuesCalculator, qValuesExtractor, nextStateValueCalculator, expectedStateActionValuesCalculator, lossCalculator, options, device, ActionSizes, lrScheduler, gail); //TODO: Null GAIL
-            
+
             //If noisy layers are present will be cached here for noise resetting
             List<NoisyLinear> noisyLayers = new();
             if (options.NoisyLayers)
             {
                 noisyLayers.AddRange(from module in policyNet.modules()
-                          where module is NoisyLinear
-                          select (NoisyLinear)module);
+                                     where module is NoisyLinear
+                                     select (NoisyLinear)module);
             }
 
             //Caching support tensor for categorical DQN
@@ -99,14 +99,15 @@ namespace RLMatrix
         private static IMemory<T> GetMemoryFromOptions(DQNAgentOptions options)
         {
             IMemory<T> memory;
-            switch(options.PrioritizedExperienceReplay)
-            {                 case true:
-                               memory = new PrioritizedReplayMemory<T>(options.MemorySize);
-                               break;
-                           case false:
-                               memory = new ReplayMemory<T>(options.MemorySize);
-                               break;
-                       }
+            switch (options.PrioritizedExperienceReplay)
+            {
+                case true:
+                    memory = new PrioritizedReplayMemory<T>(options.MemorySize);
+                    break;
+                case false:
+                    memory = new ReplayMemory<T>(options.MemorySize);
+                    break;
+            }
             return memory;
         }
 
@@ -115,7 +116,7 @@ namespace RLMatrix
         private static Func<T[], ComposableQDiscreteAgent<T>, bool, int[][]> GetActionSelectFuncFromOptions(DQNAgentOptions opts)
         {
             //We fetch correct action selection algorithm based on permutation of options
-            if(opts.BatchedInputProcessing && opts.BoltzmannExploration)
+            if (opts.BatchedInputProcessing && opts.BoltzmannExploration)
                 return (opts.NoisyLayers, opts.CategoricalDQN) switch
                 {
                     (false, false) => VanillaActionSelectionBatchedBoltzmann,
@@ -126,13 +127,13 @@ namespace RLMatrix
 
 
             if (opts.BatchedInputProcessing)
-            return (opts.NoisyLayers, opts.CategoricalDQN) switch
-            {
-                (false, false) => VanillaActionSelectionBatched,
-                (true, false) => NoisyActionSelectionBatched,
-                (false, true) => CategoricalActionSelectionBatched,
-                (true, true) => CategoricalNoisyActionSelectionBatched,
-            };
+                return (opts.NoisyLayers, opts.CategoricalDQN) switch
+                {
+                    (false, false) => VanillaActionSelectionBatched,
+                    (true, false) => NoisyActionSelectionBatched,
+                    (false, true) => CategoricalActionSelectionBatched,
+                    (true, true) => CategoricalNoisyActionSelectionBatched,
+                };
 
             return (opts.NoisyLayers, opts.CategoricalDQN) switch
             {
@@ -155,7 +156,7 @@ namespace RLMatrix
             {
                 if (agent.Random.NextDouble() > epsThreshold || !isTraining)
                 {
-                    actions[i] = ActionsFromState(states[i], agent.policyNet, agent.ActionSizes, agent.Device);
+                    actions[i] = ActionFromState(states[i], agent.ActionMask, agent.policyNet, agent.ActionSizes, agent.Device);
                 }
                 else
                 {
@@ -185,7 +186,7 @@ namespace RLMatrix
                 {
                     agent.ResetNoisyLayers();
                 }
-                result[i] = ActionsFromState(states[i], agent.policyNet, agent.ActionSizes, agent.Device);
+                result[i] = ActionFromState(states[i], agent.ActionMask, agent.policyNet, agent.ActionSizes, agent.Device);
             }
 
             return result;
@@ -412,7 +413,7 @@ namespace RLMatrix
             {
                 qValuesAllHeads = agent.policyNet.forward(stateTensor).view(states.Length, agent.ActionSizes.Length, agent.ActionSizes[0]);
             }
-
+            qValuesAllHeads = ApplyActionMask(qValuesAllHeads, agent.ActionMask, agent.Device);
             qValuesAllHeads = torch.where(qValuesAllHeads.isnan(), torch.zeros_like(qValuesAllHeads), qValuesAllHeads);
             float temperature = 1.0f;
             int[][] actions = new int[states.Length][];
@@ -516,13 +517,15 @@ namespace RLMatrix
         #endregion
 
 
-        private static int[] ActionsFromState(T state, Module<Tensor, Tensor> policyNet, int[] ActionSizes, Device device)
+        private static int[] ActionFromState(T state, int[] actionMask, Module<Tensor, Tensor> policyNet, int[] ActionSizes, Device device)
         {
             using (torch.no_grad())
             {
                 Tensor stateTensor = Utilities<T>.StateToTensor(state, device);
                 Tensor qValuesAllHeads = policyNet.forward(stateTensor).view(1, ActionSizes.Length, ActionSizes[0]);
-                Tensor bestActions = qValuesAllHeads.argmax(dim: -1).squeeze().to(ScalarType.Int32);
+                Tensor actionProbs = ApplyActionMask(qValuesAllHeads, actionMask, device);
+                var receivedActions = actionProbs.data<float>().ToArray();
+                Tensor bestActions = actionProbs.argmax(dim: -1).squeeze().to(ScalarType.Int32);
                 var result = bestActions.data<int>().ToArray();
                 return result;
             }
@@ -542,7 +545,7 @@ namespace RLMatrix
 
         private static int[] RandomActions(int[] actionSizes, Random Random)
         {
-          
+
             return actionSizes.Select(size => Random.Next(0, size)).ToArray();
         }
 
@@ -550,6 +553,25 @@ namespace RLMatrix
         {
             float deltaZ = (vMax - vMin) / (numAtoms - 1);
             return torch.linspace(vMin, vMax, steps: numAtoms, device: device);
+        }
+
+        private static Tensor ApplyActionMask(Tensor actions, int[] actionMask, Device device)
+        {
+            if (actionMask != null)
+            {
+                var actionsFloat = actions.data<float>().ToArray();
+                for(int i = 0; i< actionMask.Length;i++)
+                {
+                    if (actionMask[i] == int.MinValue)
+                        actionsFloat[i] = actionMask[i];
+                }
+                Tensor actionProbs = torch.tensor(actionsFloat, ScalarType.Float32).to(device);
+                //Tensor actionProbs = actions * mask;
+                //var receivedActions = actionProbs.data<float>().ToArray();
+                return actionProbs;
+            }
+
+            return actions;
         }
         #endregion
 

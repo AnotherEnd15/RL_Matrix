@@ -27,6 +27,7 @@ namespace RLMatrix
         public required Action ResetNoisyLayers { get; init; }
         public required DQNAgentOptions Options { get; init; }
         public required Device Device { get; init; }
+        public int[] ActionMask { get; set; }
         public required Func<T[], ComposableQDiscreteAgent<T>, bool, int[][]> SelectActionsFunc { private get; init; }
 #else
         public Module<Tensor, Tensor> policyNet { get; set; }
@@ -38,6 +39,7 @@ namespace RLMatrix
         public Action ResetNoisyLayers { get; set; }
         public DQNAgentOptions Options { get; set; }
         public Device Device { get; set; }
+        public int[] ActionMask { get; set; }
         public Func<T[], ComposableQDiscreteAgent<T>, bool, int[][]> SelectActionsFunc { private get; set; }
 #endif
 
@@ -64,6 +66,11 @@ namespace RLMatrix
             return SelectActionsFunc(states, this, isTraining);
         }
 
+        public void SetActionMask(int[] mask)
+        {
+            ActionMask = mask;
+        }
+
         public void Save(string path)
         {
             var modelPath = path.EndsWith(Path.DirectorySeparatorChar.ToString()) ? path : path + Path.DirectorySeparatorChar;
@@ -77,6 +84,11 @@ namespace RLMatrix
 
         private string GetNextAvailableModelPath(string modelPath, string modelName)
         {
+            if (!Directory.Exists(modelPath))
+            {
+                Directory.CreateDirectory(modelPath);
+            }
+
             var files = Directory.GetFiles(modelPath);
 
             int maxNumber = files

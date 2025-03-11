@@ -7,6 +7,7 @@ namespace RLMatrix.Agents.Common
     public interface IDiscreteProxy<T>
     {
 #if NET8_0_OR_GREATER
+        ValueTask SetActionMask(int[] mask);
         ValueTask<Dictionary<Guid, int[]>> SelectActionsBatchAsync(List<(Guid environmentId, T state)> stateInfos, bool isTraining);
         ValueTask ResetStates(List<(Guid environmentId, bool dones)> environmentIds);
         ValueTask UploadTransitionsAsync(IEnumerable<TransitionPortable<T>> transitions);
@@ -14,6 +15,7 @@ namespace RLMatrix.Agents.Common
         ValueTask SaveAsync(string path);
         ValueTask LoadAsync(string path);
 #else
+        Task SetActionMask(int[] mask);
         Task<Dictionary<Guid, int[]>> SelectActionsBatchAsync(List<(Guid environmentId, T state)> stateInfos, bool isTraining);
         Task ResetStates(List<(Guid environmentId, bool dones)> environmentIds);
         Task UploadTransitionsAsync(IEnumerable<TransitionPortable<T>> transitions);
