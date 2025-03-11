@@ -6,6 +6,8 @@ using System.IO;
 using RLMatrix.Memories;
 using RLMatrix.Agents.Common;
 using RLMatrix.Dashboard;
+using TorchSharp;
+using Tensorboard;
 
 namespace RLMatrix
 {
@@ -16,7 +18,7 @@ namespace RLMatrix
     public class ReplayMemory<TState> : IMemory<TState>, IStorableMemory
     {
         private int capacity;
-        private List<TransitionInMemory<TState>> memory;
+        private Queue<TransitionInMemory<TState>> memory;
         private readonly Random random = new Random();
 
         /// <summary>
@@ -38,7 +40,7 @@ namespace RLMatrix
         public ReplayMemory(int capacity)
         {
             this.capacity = capacity;
-            memory = new List<TransitionInMemory<TState>>(capacity);
+            memory = new Queue<TransitionInMemory<TState>>(capacity);
         }
 
         /// <summary>
@@ -50,9 +52,9 @@ namespace RLMatrix
         {
             if (memory.Count >= capacity)
             {
-                memory.RemoveAt(0);
+                memory.Dequeue();
             }
-            memory.Add(transition);
+            memory.Enqueue(transition);
         }
 
         /// <summary>
@@ -65,11 +67,20 @@ namespace RLMatrix
             int count = transitions.Count;
             if (memory.Count + count > capacity)
             {
-                // Increase the capacity to accommodate the new transitions
-                this.capacity = memory.Count + count;
+                for (int i = 0; i < count; i++)
+                {
+                    memory.Dequeue();
+                    // Increase the capacity to accommodate the new transitions
+                    //this.capacity = memory.Count + count;
+
+                }
             }
+
+            for(int i = 0; i < count; ++i)
+                memory.Enqueue(transitions[i]);
             ProcessAndUploadEpisodes(transitions);
-            memory.AddRange(transitions);
+
+            //memory.AddRange(transitions);
         }
         //SOLID violation your mother tried to warn you about.
         public void ProcessAndUploadEpisodes(IList<TransitionInMemory<TState>> transitions)
@@ -99,7 +110,7 @@ namespace RLMatrix
         /// <returns>An IList of all TransitionInMemorys in the memory.</returns>
         public IList<TransitionInMemory<TState>> SampleEntireMemory()
         {
-            return memory;
+            return memory.ToList();
         }
 
         /// <summary>
@@ -114,7 +125,11 @@ namespace RLMatrix
                 throw new InvalidOperationException("Batch size cannot be greater than current memory size.");
             }
 
-            return memory.OrderBy(x => random.Next()).Take(batchSize).ToList();
+            var size = Math.Min(memory.Count, this.capacity);
+            var randomIndex = torch.randint(0, size, new[] { batchSize }).data<long>().ToArray();
+            var batchMemory = randomIndex.Select(i => memory.ElementAt((int)i)).ToList();
+            return batchMemory;
+            //return memory.OrderBy(x => random.Next()).Take(batchSize).ToList();
         }
 
         /// <summary>

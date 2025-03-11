@@ -36,7 +36,7 @@ namespace RLMatrix.Agents.Common
         /// </summary>
         /// <param name="isTraining">Indicates whether the agent is in training mode.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task Step(bool isTraining = true)
+        public async Task<int> Step(bool isTraining = true)
         {
             List<Task<(Guid environmentId, TState state)>> stateTaskList = new List<Task<(Guid environmentId, TState state)>>();
             foreach (var env in _environments)
@@ -113,9 +113,17 @@ namespace RLMatrix.Agents.Common
             await _agent.ResetStates(completedEpisodes);
 
             if (!isTraining)
-                return;
+            {
+                if (actions.First().Value.discreteActions.Length > 0)
+                    return actions.First().Value.discreteActions[0];
+            }
 
             await _agent.OptimizeModelAsync();
+
+            if (actions.First().Value.discreteActions.Length > 0)
+                return actions.First().Value.discreteActions[0];
+
+            return -1;
         }
 
         /// <summary>

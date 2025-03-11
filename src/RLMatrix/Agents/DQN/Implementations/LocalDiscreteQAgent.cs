@@ -22,8 +22,7 @@ namespace RLMatrix
         /// <param name="actionSizes">The sizes of the action space.</param>
         /// <param name="stateSizes">The sizes of the state space.</param>
         /// <param name="agentComposer">The optional agent composer.</param>
-        public LocalDiscreteQAgent(DQNAgentOptions opts, int[] actionSizes, OneOf<int, (int, int)> stateSizes, 
-          IDiscreteQAgentFactory<T> agentComposer = null)
+        public LocalDiscreteQAgent(DQNAgentOptions opts, int[] actionSizes, OneOf<int, (int, int)> stateSizes, IDiscreteQAgentFactory<T> agentComposer = null)
         {
             _agent = agentComposer?.ComposeAgent(opts) ?? DiscreteQAgentFactory<T>.ComposeQAgent(opts, actionSizes, stateSizes);
         }
@@ -102,6 +101,25 @@ namespace RLMatrix
 #endif
 
         /// <summary>
+        /// Set a mask to the action probs
+        /// </summary>
+        /// <param name="mask">Array of masks (i.e., float.MinValue if masked, otherwise 1)</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+#if NET8_0_OR_GREATER
+        public ValueTask SetActionMask(int[] mask)
+#else
+        public Task SetActionMask(int[] mask)
+#endif
+        {
+            _agent.SetActionMask(mask);
+#if NET8_0_OR_GREATER
+            return ValueTask.CompletedTask;
+#else
+            return Task.CompletedTask;
+#endif
+        }
+
+        /// <summary>
         /// Selects actions for a batch of states asynchronously.
         /// </summary>
         /// <param name="stateInfos">The list of state information.</param>
@@ -112,6 +130,7 @@ namespace RLMatrix
         {
             T[] states = stateInfos.Select(info => info.state).ToArray();
             int[][] actions = _agent.SelectActions(states, isTraining);
+
             Dictionary<Guid, int[]> actionDict = new Dictionary<Guid, int[]>();
             for (int i = 0; i < stateInfos.Count; i++)
             {
