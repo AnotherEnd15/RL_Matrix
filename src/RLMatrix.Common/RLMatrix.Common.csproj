@@ -9,7 +9,7 @@
 		<Platforms>AnyCPU</Platforms>
 
 		<PackageId>RLMatrix.Common</PackageId>
-		<Version>0.4.3.8</Version>
+		<Version>0.4.3</Version>
 		<Authors>Adrian Sieradzki</Authors>
 		<Company>Adrian Sieradzki</Company>
 		<Description>Deep Reinforcement Learning in .NET</Description>
@@ -21,7 +21,6 @@
 		<PackageTags>Reinforcement Learning, RL, Agent, Policy, DQN, PPO, DDPG, MCTS, ML, Machine Learning, Deep Reinforcement Learning</PackageTags>
 		<PackageIcon>icon.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
